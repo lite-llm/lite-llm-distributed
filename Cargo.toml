@@ -1,0 +1,12 @@
+[package]
+name = "lite-llm-distributed"
+version = "0.1.0"
+edition = "2021"
+description = "Lite LLM distributed systems skeleton for deterministic multi-node execution."
+license-file = "LICENSE"
+readme = "README.md"
+repository = "https://github.com/lite-llm/lite-llm-distributed"
+authors = ["Lite LLM Developers <litellm@dust.llc>"]
+rust-version = "1.70"
+
+[dependencies]
