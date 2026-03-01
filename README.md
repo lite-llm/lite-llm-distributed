@@ -1,20 +1,36 @@
 # lite-llm-distributed
 
-Independent Rust crate skeleton for Lite LLM: Distributed Systems Layer (Spec 011-020).
+Distributed execution crate for Lite LLM (`SPEC-011` to `SPEC-020`).
 
-## Purpose
-This crate provides compile-ready interfaces and placeholder implementations for its spec layer.
+## Scope
+Implements deterministic distributed primitives:
 
-## Structure
-- src/lib.rs: module exports and public API surface
-- src/*.rs: layer-specific primitives and traits
+- DP/TP/PP/EP topology mapping and ownership rules
+- routing consensus checksums and agreement
+- deterministic collective operations and all-to-all ordering
+- tagged transport abstraction and monotonic message ordering
+- failure classification and deterministic recovery actions
 
-## Build
-`ash
-cargo check
-`
+## Modules
+- `src/parallelism.rs`: topology shapes and rank/coordinate conversion
+- `src/consensus.rs`: route selection consensus and checksum validation
+- `src/collectives.rs`: deterministic all-reduce/all-to-all
+- `src/transport.rs`: transport interface and in-memory tagged backend
+- `src/fault_tolerance.rs`: failure domains, policies, and coordinator
+- `src/error.rs`: distributed error model
 
-## Notes
-- This crate is intentionally standalone.
-- Runtime behavior is scaffolded, not production-complete.
-- License for this crate is in LICENSE.
+## Build and Test
+```bash
+cargo fmt
+cargo test
+```
+
+## Documentation
+- System docs: `../lite-llm-docs/README.md`
+- Crate map: `../lite-llm-docs/reference/crate-catalog.md`
+
+## Changelog
+See `CHANGELOG.md`.
+
+## License
+See `LICENSE`.
