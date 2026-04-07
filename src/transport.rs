@@ -53,7 +53,8 @@ pub trait Transport {
         tag: MessageTag,
         payload: Vec<u8>,
     ) -> DistributedResult<()>;
-    fn recv(&self, to_rank: usize, from_rank: usize, tag: MessageTag) -> DistributedResult<Vec<u8>>;
+    fn recv(&self, to_rank: usize, from_rank: usize, tag: MessageTag)
+        -> DistributedResult<Vec<u8>>;
     fn barrier(&self, rank: usize, tag: MessageTag) -> DistributedResult<()>;
 }
 
@@ -123,7 +124,12 @@ impl Transport for InMemoryTaggedTransport {
         Ok(())
     }
 
-    fn recv(&self, to_rank: usize, from_rank: usize, tag: MessageTag) -> DistributedResult<Vec<u8>> {
+    fn recv(
+        &self,
+        to_rank: usize,
+        from_rank: usize,
+        tag: MessageTag,
+    ) -> DistributedResult<Vec<u8>> {
         self.validate_rank(to_rank)?;
         self.validate_rank(from_rank)?;
 
@@ -171,9 +177,7 @@ mod tests {
         transport
             .send(0, 1, tag, b"hello".to_vec())
             .expect("send should succeed");
-        let payload = transport
-            .recv(1, 0, tag)
-            .expect("receive should succeed");
+        let payload = transport.recv(1, 0, tag).expect("receive should succeed");
 
         assert_eq!(payload, b"hello".to_vec());
     }

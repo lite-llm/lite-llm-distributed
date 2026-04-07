@@ -136,7 +136,8 @@ impl RecoveryCoordinator {
 #[cfg(test)]
 mod tests {
     use super::{
-        FailureClass, FailureDomain, FailureEvent, RecoveryAction, RecoveryCoordinator, RecoveryPolicy,
+        FailureClass, FailureDomain, FailureEvent, RecoveryAction, RecoveryCoordinator,
+        RecoveryPolicy,
     };
 
     fn policy() -> RecoveryPolicy {
@@ -199,5 +200,3 @@ mod tests {
         assert_eq!(timed_out, vec![0]);
     }
 }
-
-

@@ -64,11 +64,7 @@ impl RoutingConsensus {
             })
             .collect();
 
-        scored.sort_by(|a, b| {
-            b.1.cmp(&a.1)
-                .then(a.2.cmp(&b.2))
-                .then(a.0.cmp(&b.0))
-        });
+        scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.2.cmp(&b.2)).then(a.0.cmp(&b.0)));
 
         let selected: Vec<ExpertAddress> = scored
             .into_iter()

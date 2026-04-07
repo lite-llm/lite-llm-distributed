@@ -64,12 +64,9 @@ impl CollectiveOps for DeterministicCollectives {
             ));
         }
 
-        let width = rank_inputs
-            .first()
-            .map(|row| row.len())
-            .ok_or(DistributedError::InvalidCollectiveInput(
-                "rank_inputs cannot be empty",
-            ))?;
+        let width = rank_inputs.first().map(|row| row.len()).ok_or(
+            DistributedError::InvalidCollectiveInput("rank_inputs cannot be empty"),
+        )?;
 
         for row in rank_inputs {
             if row.len() != width {

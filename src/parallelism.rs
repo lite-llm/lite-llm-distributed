@@ -93,7 +93,8 @@ impl ParallelismConfig {
             ));
         }
 
-        let rank = (((coordinate.dp * self.tensor_parallel + coordinate.tp) * self.pipeline_parallel
+        let rank = (((coordinate.dp * self.tensor_parallel + coordinate.tp)
+            * self.pipeline_parallel
             + coordinate.pp)
             * self.expert_parallel)
             + coordinate.ep;
