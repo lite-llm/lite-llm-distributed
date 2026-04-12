@@ -2,7 +2,7 @@
 name = "lite-llm-distributed"
 version = "0.1.0"
 edition = "2021"
-description = "Lite LLM distributed systems skeleton for deterministic multi-node execution."
+description = "Lite LLM distributed systems: deterministic multi-node execution with gRPC transport."
 license-file = "LICENSE"
 readme = "README.md"
 repository = "https://github.com/lite-llm/lite-llm-distributed"
@@ -10,3 +10,22 @@ authors = ["Lite LLM Developers <litellm@dust.llc>"]
 rust-version = "1.70"
 
 [dependencies]
+# Async runtime for network I/O
+tokio = { version = "1", features = ["full"] }
+# Async trait support
+async-trait = "0.1"
+# gRPC framework for node-to-node communication
+tonic = "0.12"
+# Protocol buffer serialization
+prost = "0.13"
+# For message buffers
+bytes = "1"
+# Existing deps
+
+[features]
+default = []
+# gRPC transport requires full tokio runtime
+grpc-transport = []
+
+[dev-dependencies]
+futures = "0.3"

@@ -9,6 +9,9 @@ pub enum DistributedError {
         world_size: usize,
     },
     InvalidCollectiveInput(&'static str),
+    InvalidInput(&'static str),
+    ParseError(&'static str),
+    TransportError(String),
     TagOrderViolation {
         from_rank: usize,
         to_rank: usize,
@@ -33,6 +36,9 @@ impl fmt::Display for DistributedError {
                 write!(f, "rank {rank} out of range for world size {world_size}")
             }
             Self::InvalidCollectiveInput(msg) => write!(f, "invalid collective input: {msg}"),
+            Self::InvalidInput(msg) => write!(f, "invalid input: {msg}"),
+            Self::ParseError(msg) => write!(f, "parse error: {msg}"),
+            Self::TransportError(msg) => write!(f, "transport error: {msg}"),
             Self::TagOrderViolation { from_rank, to_rank } => write!(
                 f,
                 "tag order violation for pair ({from_rank} -> {to_rank})"
