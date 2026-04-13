@@ -9,6 +9,9 @@ repository = "https://github.com/lite-llm/lite-llm-distributed"
 authors = ["Lite LLM Developers <litellm@dust.llc>"]
 rust-version = "1.70"
 
+[build-dependencies]
+tonic-build = "0.12"
+
 [dependencies]
 # Async runtime for network I/O
 tokio = { version = "1", features = ["full"] }
@@ -20,6 +23,12 @@ tonic = "0.12"
 prost = "0.13"
 # For message buffers
 bytes = "1"
+# Reconnect and connection pooling
+tower = "0.5"
+# Backoff for retry logic
+tokio-retry = "0.3"
+# Logging
+tracing = "0.1"
 # Existing deps
 
 [features]

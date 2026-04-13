@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package transport;
+
+// MessageTag uniquely identifies a message in the distributed transport layer.
+// Messages are ordered by (step, layer, phase, sequence).
+message MessageTag {
+  uint64 step = 1;
+  uint32 layer = 2;
+  MessagePhase phase = 3;
+  uint32 sequence = 4;
+}
+
+enum MessagePhase {
+  DISPATCH = 0;
+  RETURN = 1;
+  COLLECTIVE = 2;
+  HEARTBEAT = 3;
+  CONTROL = 4;
+}
+
+// ---- RPC Request / Response types ----
+
+message SendMessageRequest {
+  uint32 from_rank = 1;
+  uint32 to_rank = 2;
+  MessageTag tag = 3;
+  bytes payload = 4;
+}
+
+message SendMessageResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message RecvMessageRequest {
+  uint32 to_rank = 1;
+  uint32 from_rank = 2;
+  MessageTag tag = 3;
+  // Timeout in milliseconds. 0 means block indefinitely.
+  uint64 timeout_ms = 4;
+}
+
+message RecvMessageResponse {
+  bool ok = 1;
+  bytes payload = 2;
+  string error = 3;
+}
+
+message BarrierRequest {
+  uint32 rank = 1;
+  MessageTag tag = 2;
+  uint32 world_size = 3;
+}
+
+message BarrierResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  // Serving status per gRPC health-checking protocol.
+  HealthStatus status = 1;
+  uint32 local_rank = 2;
+  uint32 world_size = 3;
+  string listen_addr = 4;
+  uint64 uptime_secs = 5;
+}
+
+enum HealthStatus {
+  UNKNOWN = 0;
+  SERVING = 1;
+  NOT_SERVING = 2;
+}
+
+// ---- Service definition ----
+
+service TransportService {
+  // Send a payload with tag metadata to a remote node.
+  rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
+
+  // Receive a payload matching tag from the local queue.
+  rpc RecvMessage (RecvMessageRequest) returns (RecvMessageResponse);
+
+  // Synchronize across ranks at a barrier point.
+  rpc Barrier (BarrierRequest) returns (BarrierResponse);
+
+  // Check node liveness and status.
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
+}
