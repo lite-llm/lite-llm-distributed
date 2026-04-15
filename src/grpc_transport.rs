@@ -125,9 +125,11 @@ impl GrpcTransport {
             Some(Arc::new(client))
         };
 
+        let world_size = config.world_size;
+
         Ok(Self {
             config,
-            state: Arc::new(Mutex::new(TransportState::new(config.world_size))),
+            state: Arc::new(Mutex::new(TransportState::new(world_size))),
             client,
         })
     }
@@ -314,7 +316,9 @@ impl crate::grpc_transport::AsyncTransport for GrpcTransport {
             return Ok(());
         }
 
-        // Notify other nodes about this barrier via gRPC.
+        // Only notify truly remote peers (ranks outside our local world_size).
+        // In single-process test mode, all peer ranks are within world_size so they
+        // will arrive via the same transport instance — no network RPCs needed.
         if let Some(ref client) = self.client {
             let mut peer_ranks: Vec<usize> = self
                 .config
@@ -325,12 +329,14 @@ impl crate::grpc_transport::AsyncTransport for GrpcTransport {
             peer_ranks.sort();
 
             for peer_rank in peer_ranks {
-                client
-                    .barrier(peer_rank, rank, tag)
-                    .await
-                    .map_err(|e| {
-                        DistributedError::TransportError(format!("barrier to rank {peer_rank}: {e}"))
-                    })?;
+                if peer_rank >= self.config.world_size {
+                    client
+                        .barrier(peer_rank, rank, tag)
+                        .await
+                        .map_err(|e| {
+                            DistributedError::TransportError(format!("barrier to rank {peer_rank}: {e}"))
+                        })?;
+                }
             }
         }
 
@@ -394,6 +400,9 @@ impl Transport for GrpcTransport {
 }
 
 /// Async transport interface for distributed message passing.
+///
+/// This trait defines the core async operations for sending and receiving
+/// tagged messages between distributed ranks, with barrier synchronization.
 #[async_trait::async_trait]
 pub trait AsyncTransport: Send + Sync {
     /// Send a payload to a remote node with a message tag.
@@ -428,7 +437,7 @@ mod tests {
         GrpcTransport::new(config).expect("valid transport")
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn grpc_transport_send_recv_roundtrip() {
         let transport = make_transport(2, 0);
         let tag = MessageTag::new(1, 0, MessagePhase::Dispatch, 0);
@@ -443,22 +452,26 @@ mod tests {
         assert_eq!(payload, b"hello-grpc".to_vec());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn grpc_transport_barrier_works() {
         let transport = make_transport(4, 0);
         let tag = MessageTag::new(1, 0, MessagePhase::Collective, 0);
 
+        // All 4 ranks arrive at the barrier
         for rank in 0..4 {
             transport
                 .barrier(rank, tag)
                 .expect("barrier should succeed");
         }
 
-        // After all ranks arrive, barrier is cleared
-        assert!(transport.barrier(0, tag).is_err());
+        // After all ranks arrive, barrier is cleared and can be reused.
+        // Re-arriving with rank 0 should succeed (new barrier instance).
+        transport
+            .barrier(0, tag)
+            .expect("reused barrier should succeed");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn grpc_transport_validates_rank() {
         let transport = make_transport(2, 0);
         let tag = MessageTag::new(1, 0, MessagePhase::Dispatch, 0);

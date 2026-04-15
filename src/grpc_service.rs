@@ -12,38 +12,41 @@ use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
 use crate::error::{DistributedError, DistributedResult};
-use crate::transport::MessagePhase;
-
-// Re-export the tonic-generated module.
-include!(concat!(env!("OUT_DIR"), "/transport.rs"));
+pub use crate::proto::transport_service_server;
+use crate::proto::{
+    HealthCheckRequest, HealthCheckResponse,
+    HealthStatus, MessagePhase as ProtoMessagePhase, MessageTag as ProtoMessageTag,
+    SendMessageRequest, SendMessageResponse, RecvMessageRequest, RecvMessageResponse,
+    BarrierRequest, BarrierResponse,
+};
 
 /// Convert a `transport::MessageTag` (prost-generated) to the crate's `MessageTag`.
-pub fn proto_tag_to_crate_tag(tag: &MessageTag) -> crate::transport::MessageTag {
+pub fn proto_tag_to_crate_tag(tag: &ProtoMessageTag) -> crate::transport::MessageTag {
     crate::transport::MessageTag {
         step: tag.step,
         layer: tag.layer,
-        phase: match MessagePhase::try_from(tag.phase).unwrap_or(MessagePhase::Dispatch) {
-            MessagePhase::Dispatch => crate::transport::MessagePhase::Dispatch,
-            MessagePhase::Return => crate::transport::MessagePhase::Return,
-            MessagePhase::Collective => crate::transport::MessagePhase::Collective,
-            MessagePhase::Heartbeat => crate::transport::MessagePhase::Heartbeat,
-            MessagePhase::Control => crate::transport::MessagePhase::Control,
+        phase: match ProtoMessagePhase::try_from(tag.phase).unwrap_or(ProtoMessagePhase::Dispatch) {
+            ProtoMessagePhase::Dispatch => crate::transport::MessagePhase::Dispatch,
+            ProtoMessagePhase::Return => crate::transport::MessagePhase::Return,
+            ProtoMessagePhase::Collective => crate::transport::MessagePhase::Collective,
+            ProtoMessagePhase::Heartbeat => crate::transport::MessagePhase::Heartbeat,
+            ProtoMessagePhase::Control => crate::transport::MessagePhase::Control,
         },
         sequence: tag.sequence,
     }
 }
 
 /// Convert the crate's `MessageTag` to the prost-generated `MessageTag`.
-pub fn crate_tag_to_proto_tag(tag: crate::transport::MessageTag) -> MessageTag {
+pub fn crate_tag_to_proto_tag(tag: crate::transport::MessageTag) -> ProtoMessageTag {
     let phase = match tag.phase {
-        crate::transport::MessagePhase::Dispatch => MessagePhase::Dispatch,
-        crate::transport::MessagePhase::Return => MessagePhase::Return,
-        crate::transport::MessagePhase::Collective => MessagePhase::Collective,
-        crate::transport::MessagePhase::Heartbeat => MessagePhase::Heartbeat,
-        crate::transport::MessagePhase::Control => MessagePhase::Control,
+        crate::transport::MessagePhase::Dispatch => ProtoMessagePhase::Dispatch,
+        crate::transport::MessagePhase::Return => ProtoMessagePhase::Return,
+        crate::transport::MessagePhase::Collective => ProtoMessagePhase::Collective,
+        crate::transport::MessagePhase::Heartbeat => ProtoMessagePhase::Heartbeat,
+        crate::transport::MessagePhase::Control => ProtoMessagePhase::Control,
     } as i32;
 
-    MessageTag {
+    ProtoMessageTag {
         step: tag.step,
         layer: tag.layer,
         phase,
@@ -52,6 +55,9 @@ pub fn crate_tag_to_proto_tag(tag: crate::transport::MessageTag) -> MessageTag {
 }
 
 /// Shared state between the gRPC server and the transport layer.
+///
+/// Manages message queues, monotonic tag ordering, and barrier coordination
+/// for all ranks communicating through this transport instance.
 #[derive(Debug, Default)]
 pub struct TransportState {
     /// Incoming message queues: (from_rank, to_rank, tag) -> queue of payloads.
@@ -65,6 +71,7 @@ pub struct TransportState {
 }
 
 impl TransportState {
+    /// Create a new transport state with the given world size.
     pub fn new(world_size: usize) -> Self {
         Self {
             queues: BTreeMap::new(),
@@ -74,6 +81,7 @@ impl TransportState {
         }
     }
 
+    /// Get the world size of this transport.
     pub fn world_size(&self) -> usize {
         self.world_size
     }
@@ -119,6 +127,7 @@ impl TransportState {
     }
 
     /// Register a rank arrival at a barrier.
+    ///
     /// Returns `true` if all ranks have arrived (barrier cleared).
     pub fn barrier_arrive(&mut self, rank: usize, tag: crate::transport::MessageTag) -> bool {
         let participants = self.barriers.entry(tag).or_default();

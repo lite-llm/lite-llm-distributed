@@ -1,5 +1,5 @@
 use lite_llm_distributed::{
-    CollectiveOps, ConsensusConfig, DeterministicCollectives, ExpertAddress, ParallelismConfig,
+    ConsensusConfig, DeterministicCollectives, DeterministicCollectivesOp, ExpertAddress, ParallelismConfig,
     RankCoordinate, RoutingConsensus,
 };
 

@@ -17,13 +17,11 @@ use tonic::transport::{Channel, Endpoint};
 use tonic::{Request, Status};
 
 use crate::error::{DistributedError, DistributedResult};
-use crate::transport::{MessagePhase, MessageTag};
-
-// Re-export the tonic-generated client.
-include!(concat!(env!("OUT_DIR"), "/transport.rs"));
-
-/// Re-export from the service module for tag conversion.
-use crate::grpc_service::{crate_tag_to_proto_tag, proto_tag_to_crate_tag};
+use crate::proto::{
+    transport_service_client, HealthCheckRequest, HealthCheckResponse,
+    SendMessageRequest, RecvMessageRequest, BarrierRequest,
+};
+use crate::grpc_service::crate_tag_to_proto_tag;
 
 /// Configuration for a gRPC transport client.
 #[derive(Debug, Clone)]
@@ -57,7 +55,8 @@ struct PeerClient {
 }
 
 impl PeerClient {
-    /// Connect to the peer at `uri` and create a new client.
+    /// Create a lazy connection to the peer at `uri`.
+    /// The actual connection is established on first use.
     async fn connect(
         uri: &str,
         config: &GrpcClientConfig,
@@ -66,11 +65,10 @@ impl PeerClient {
             DistributedError::TransportError(format!("invalid peer URI: {e}"))
         })?;
 
-        let channel = endpoint.connect_lazy().connect();
-        let channel = Channel::balance_list(vec![channel].into_iter()).await;
-        let channel = endpoint.connect().await.map_err(|e| {
-            DistributedError::TransportError(format!("failed to connect to {uri}: {e}"))
-        })?;
+        let channel = endpoint
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(config.timeout)
+            .connect_lazy();
 
         Ok(Self {
             channel,
@@ -80,13 +78,6 @@ impl PeerClient {
         })
     }
 
-    /// Get a fresh `TransportServiceClient` bound to the channel.
-    fn client(&self) -> transport_service_client::TransportServiceClient<Channel> {
-        transport_service_client::TransportServiceClient::new(self.channel.clone())
-            .max_decoding_message_size(usize::MAX)
-            .max_encoding_message_size(usize::MAX)
-    }
-
     /// Execute an RPC with retry logic.
     async fn with_retry<F, Fut, T>(&self, f: F) -> DistributedResult<T>
     where
@@ -94,6 +85,7 @@ impl PeerClient {
             transport_service_client::TransportServiceClient<Channel>,
         ) -> Fut
             + Send
+            + Clone
             + 'static,
         Fut: std::future::Future<Output = Result<T, Status>> + Send,
         T: Send + 'static,
@@ -110,9 +102,9 @@ impl PeerClient {
 
         Retry::spawn(strategy, move || {
             let channel = channel.clone();
-            let f = &f;
+            let f = f.clone();
             async move {
-                let mut client = transport_service_client::TransportServiceClient::new(channel.clone())
+                let client = transport_service_client::TransportServiceClient::new(channel.clone())
                     .max_decoding_message_size(usize::MAX)
                     .max_encoding_message_size(usize::MAX);
 
@@ -141,7 +133,9 @@ impl PeerClient {
 }
 
 /// A pool of gRPC clients, one per peer rank.
-/// Handles connection pooling and retry logic.
+///
+/// Handles connection pooling, lazy connection establishment,
+/// and automatic retry logic with exponential backoff.
 #[derive(Clone)]
 pub struct GrpcTransportClient {
     /// Peer clients keyed by rank.
@@ -162,11 +156,6 @@ impl GrpcTransportClient {
         world_size: usize,
         config: GrpcClientConfig,
     ) -> DistributedResult<Self> {
-        if peer_addrs.len() != world_size.saturating_sub(1) && world_size > 1 {
-            // We expect addresses for all peers (world_size - 1 other nodes).
-            // But allow if the caller provides partial addresses (some nodes may be local).
-        }
-
         Ok(Self {
             peers: Arc::new(Mutex::new(HashMap::new())),
             peer_addrs,
@@ -208,7 +197,7 @@ impl GrpcTransportClient {
         &self,
         to_rank: usize,
         from_rank: usize,
-        tag: MessageTag,
+        tag: crate::transport::MessageTag,
         payload: Vec<u8>,
     ) -> DistributedResult<()> {
         let peer = self.get_peer(to_rank).await?;
@@ -244,7 +233,7 @@ impl GrpcTransportClient {
         &self,
         from_rank: usize,
         to_rank: usize,
-        tag: MessageTag,
+        tag: crate::transport::MessageTag,
     ) -> DistributedResult<Vec<u8>> {
         let peer = self.get_peer(from_rank).await?;
         let proto_tag = crate_tag_to_proto_tag(tag);
@@ -272,7 +261,7 @@ impl GrpcTransportClient {
     }
 
     /// Execute a barrier with a remote node.
-    pub async fn barrier(&self, to_rank: usize, rank: usize, tag: MessageTag) -> DistributedResult<()> {
+    pub async fn barrier(&self, to_rank: usize, rank: usize, tag: crate::transport::MessageTag) -> DistributedResult<()> {
         let peer = self.get_peer(to_rank).await?;
         let proto_tag = crate_tag_to_proto_tag(tag);
 

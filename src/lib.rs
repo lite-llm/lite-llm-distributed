@@ -7,6 +7,7 @@ pub mod grpc_client;
 pub mod grpc_service;
 pub mod grpc_transport;
 pub mod parallelism;
+pub mod proto;
 pub mod transport;
 
 pub use collectives::{CollectiveOps as DeterministicCollectivesOp, DeterministicCollectives};
