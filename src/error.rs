@@ -59,6 +59,10 @@ impl fmt::Display for DistributedError {
     }
 }
 
-impl Error for DistributedError {}
+impl Error for DistributedError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
 
 pub type DistributedResult<T> = Result<T, DistributedError>;
